@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+
+  "name": "上帝之眼",
+  "version": "0.1.0",
+  "description": "看人之不能看、看之不能见",
+
+  "icons": {
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+
+  "permissions": [
+    "activeTab",    
+    "scripting",    
+    "storage",
+    "webRequest",
+    "cookies",
+    "tabs",
+    "webNavigation"
+  ],
+
+  "host_permissions": [
+    "*://*/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "logo.png",
+      "32": "logo.png",
+      "48": "logo.png",
+      "128": "logo.png"
+    },
+    "default_badge_text": "0",
+    "default_badge_background_color": "#666666"
+  }
+}
