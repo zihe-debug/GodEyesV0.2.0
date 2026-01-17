@@ -4,4 +4,87 @@ const w={debug:(...e)=>console.debug("[Scanner]",...e),info:(...e)=>console.info
 `)+`
 `,t=[],a=0),t.push(r),a+=s}t.length>0&&(yield t.join(`
 `)+`
-`)}const ae=async(e,n=!1,t)=>{const a=Object.entries(c.PATTERNS),r=b.get(g);let s=!1;for(const[i,o]of a){const l=S[i.toLowerCase()];if(!l)continue;let u,h=0,y=1e4;try{if(i==="FINGER"){for(const{pattern:d,name:p,class:m,type:z,description:H,extType:Y,extName:X}of o.patterns){if(r.fingers.has(m))continue;e.match(d)&&l(p,m,z,H,t,r,Y,X)&&(s=!0)}continue}if(i==="CREDENTIALS"||i==="ID_KEY"||i==="EMAIL"||i==="API"||i==="IP"||i==="DOMAIN"){let d=[];i==="IP"?n?d=[{pattern:o.toString()}]:d=[{pattern:c.PATTERNS.IP_RESOURCE.toString()}]:i==="DOMAIN"?n?d=[{pattern:o.toString()}]:d=[{pattern:c.PATTERNS.DOMAIN_RESOURCE.toString()}]:i==="EMAIL"?d=[{pattern:c.PATTERNS.EMAIL.toString()}]:i==="API"?d=[{pattern:c.API.PATTERN.toString()}]:d=o.patterns.map(p=>({pattern:p.pattern.toString()}));try{const p=await new Promise(m=>{chrome.runtime.sendMessage({type:"REGEX_MATCH",from:"content",to:"background",chunk:e,patterns:d,patternType:i},m)});p&&p.matches.length>0&&p.matches.forEach(({match:m})=>{l(m,t,r)&&(s=!0)})}catch(p){w.error("CREDENTIALS匹配出错:",p)}continue}const f=o;for(;(u=f.exec(e))!==null;){if(f.lastIndex<=h){w.warn(`检测到可能的无限循环: ${o}`);break}if(h=f.lastIndex,--y<=0){w.warn(`达到最大迭代次数: ${i}`);break}if(l(u[0],t,r)&&(s=!0),!f.global)break}}catch(f){w.error(`匹配${i}出错:`,f)}}return s},B=(e,n=!1)=>{const t=new Set,a=window.location.origin,r=/['"](?:[^'"]+\.(?:js)(?:\?[^\s'"]*)?)['"]/g,s=/{(?:"?[0-9a-z-~_]*"?:"?[0-9a-z-_~]{1,}"?,?){1,}}[+|()\[\]\{\}a-z]*"[a-z0-9-_.]*.js"/i,i=/("[a-z/]*"?)[+|()\[\]\{\}a-z]*(?:{(?:"?[0-9a-z-_~]*"?:"?[0-9a-z-_~]{1,}"?,?){1,}})?[+|()\[\]\{\}a-z]*\+?"."?\+?\(?{(?:"?[0-9a-z-_~]*"?:"?[0-9a-z-_~]{1,}"?,?){1,}}[+|()\[\]\{\}a-z]*("[a-z0-9-_.]*.js")/i,o=/"?[0-9a-z-~_]*"?\s*:\s*"?[0-9a-z-~_]*"?/ig;for(const l of K(e)){let u=null;if(P||(u=l.match(i)),u&&!P){P=!0;let h=u[1].slice(1,-1),y=u[2].slice(1,-1);h.startsWith("/")||(h="/"+h),h.endsWith("/")||(h=h+"/");let f=u[0].match(s);f&&Array.from(f[0].matchAll(o)).forEach(d=>{let p=d[0].split(":")[0];(p.includes('"')||p.includes("'"))&&(p=p.slice(1,-1));let m=d[0].split(":")[1];(m.includes('"')||m.includes("'"))&&(m=m.slice(1,-1),/^[a-z0-9]+$/.test(m)||(p=m,m=""));const z=a+h+p+(m?"."+m:"")+y;t.add(z)})}(!P&&N||n)&&Array.from(l.matchAll(r)).map(y=>{const f=y[0].slice(1,-1);let d=null;try{return f.startsWith("http")?d=f:f.startsWith("//")?d=window.location.protocol+f:f.startsWith("/")?d=a+f:d=new URL(f,a).href,d}catch(p){return console.error("Error processing JS path:",p),null}}).filter(y=>y!==null).forEach(y=>t.add(y))}return t};async function j(e,n=!1,t){try{for(const a of e)if(a)for(const r of K(a))await ae(r,n,t)&&D(),await new Promise(i=>setTimeout(i,0))}catch(a){a.message!=="Extension context invalidated."&&w.error("扫描出错:",a)}}const se=()=>{L&&clearTimeout(L),L=setTimeout(()=>{w.info("DOM变化触发重新扫描...");const e=document.documentElement.innerHTML;e&&j([e],!0,document.location.href)},1e3)};function J(e){b.has(e)||b.set(e,{domains:new Map,absoluteApis:new Map,apis:new Map,moduleFiles:new Map,docFiles:new Map,ips:new Map,phones:new Map,emails:new Map,idcards:new Map,jwts:new Map,imageFiles:new Map,jsFiles:new Map,vueFiles:new Map,urls:new Map,githubUrls:new Map,companies:new Map,credentials:new Map,cookies:new Map,idKeys:new Map,fingers:new Map,progress:new Map})}const re=new MutationObserver(e=>{if(!R)return;e.filter(t=>!(t.type==="attributes"&&(t.attributeName==="class"||t.attributeName==="style"))).length>0&&se()});async function $(){try{await Q(),g||await ee(),J(g),Object.keys(b.get(g)).forEach(a=>{b.get(g)[a].clear()});let e=null;if(e=v,T===null&&chrome.storage.local.get(["customWhitelist"],a=>{T=a.customWhitelist?.some(r=>e===r||e.endsWith(`.${r}`))}),T)return;const n=document.documentElement.innerHTML;n&&await j([n],!0,document.location.href);const t=B(n,!0);t.size>0&&t.forEach(a=>{a.startsWith("chrome-extension://")||x(a,"page")}),U||(re.observe(document.body,{childList:!0,subtree:!0,characterData:!0,attributeFilter:["src","href","data-*"],characterDataOldValue:!1}),U=!0)}catch(e){e.message!=="Extension context invalidated."&&w.error("初始化扫描出错:",e)}}const D=()=>{try{const e={},n=C.size,t=I.length,a=k.size,r=n===0?100:Math.floor((n-t-a)/n*100);b.get(g).progress.set("percent",r);for(const s in b.get(g))e[s]=Array.from(b.get(g)[s]);chrome.runtime.sendMessage({type:"SCAN_UPDATE",from:"content",to:"popup",results:e,tabId:g,frameUrl:window.location.href}).catch(()=>{}),chrome.runtime.sendMessage({type:"UPDATE_BADGE",from:"content",to:"background",results:e,tabId:g,frameUrl:window.location.href}).catch(()=>{})}catch(e){e.message!=="Extension context invalidated."&&w.error("发送更新出错:",e)}};async function V(){for(;I.length>0&&k.size<q;){const e=I.shift();k.add(e),ie(e).finally(()=>{k.delete(e),k.size===0&&D(),I.length>0&&V()}),await new Promise(n=>setTimeout(n,0))}}async function ie(e){try{const n=await new Promise(t=>{chrome.runtime.sendMessage({type:"FETCH_JS",url:e,from:"content",to:"background"},t)});if(n?.content){await j([n.content],!1,e);const t=B(n.content,!1);t&&t.forEach(a=>x(a,"page",W(e)))}}catch(n){console.error("处理 JS 出错:",e,n)}}chrome.runtime.onMessage.addListener((e,n,t)=>{try{switch(e.type){case"GET_RESULTS":{if(!b.get(e.tabId)){t(null);break}D(),t(null);break}case"UPDATE_DYNAMIC_SCAN":{R=!!e.enabled,t({success:!0});break}case"UPDATE_DEEP_SCAN":{N=!!e.enabled,t({success:!0});break}default:t(null)}}catch(a){a.message!=="Extension context invalidated."&&w.error("处理消息出错:",a),t(null)}return!0});(async()=>document.readyState==="loading"?document.addEventListener("DOMContentLoaded",async()=>{await Z(),await $()}):(await Z(),await $()))();
+`)}const ae=async(e,n=!1,t)=>{const a=Object.entries(c.PATTERNS),r=b.get(g);let s=!1;for(const[i,o]of a){const l=S[i.toLowerCase()];if(!l)continue;let u,h=0,y=1e4;try{if(i==="FINGER"){for(const{pattern:d,name:p,class:m,type:z,description:H,extType:Y,extName:X}of o.patterns){if(r.fingers.has(m))continue;e.match(d)&&l(p,m,z,H,t,r,Y,X)&&(s=!0)}continue}if(i==="CREDENTIALS"||i==="ID_KEY"||i==="EMAIL"||i==="API"||i==="IP"||i==="DOMAIN"){let d=[];i==="IP"?n?d=[{pattern:o.toString()}]:d=[{pattern:c.PATTERNS.IP_RESOURCE.toString()}]:i==="DOMAIN"?n?d=[{pattern:o.toString()}]:d=[{pattern:c.PATTERNS.DOMAIN_RESOURCE.toString()}]:i==="EMAIL"?d=[{pattern:c.PATTERNS.EMAIL.toString()}]:i==="API"?d=[{pattern:c.API.PATTERN.toString()}]:d=o.patterns.map(p=>({pattern:p.pattern.toString()}));try{const p=await new Promise(m=>{chrome.runtime.sendMessage({type:"REGEX_MATCH",from:"content",to:"background",chunk:e,patterns:d,patternType:i},m)});p&&p.matches.length>0&&p.matches.forEach(({match:m})=>{l(m,t,r)&&(s=!0)})}catch(p){w.error("CREDENTIALS匹配出错:",p)}continue}const f=o;for(;(u=f.exec(e))!==null;){if(f.lastIndex<=h){w.warn(`检测到可能的无限循环: ${o}`);break}if(h=f.lastIndex,--y<=0){w.warn(`达到最大迭代次数: ${i}`);break}if(l(u[0],t,r)&&(s=!0),!f.global)break}}catch(f){w.error(`匹配${i}出错:`,f)}}return s},B=(e,n=!1)=>{const t=new Set,a=window.location.origin,r=/['"](?:[^'"]+\.(?:js)(?:\?[^\s'"]*)?)['"]/g,s=/{(?:"?[0-9a-z-~_]*"?:"?[0-9a-z-_~]{1,}"?,?){1,}}[+|()\[\]\{\}a-z]*"[a-z0-9-_.]*.js"/i,i=/("[a-z/]*"?)[+|()\[\]\{\}a-z]*(?:{(?:"?[0-9a-z-_~]*"?:"?[0-9a-z-_~]{1,}"?,?){1,}})?[+|()\[\]\{\}a-z]*\+?"."?\+?\(?{(?:"?[0-9a-z-_~]*"?:"?[0-9a-z-_~]{1,}"?,?){1,}}[+|()\[\]\{\}a-z]*("[a-z0-9-_.]*.js")/i,o=/"?[0-9a-z-~_]*"?\s*:\s*"?[0-9a-z-~_]*"?/ig;for(const l of K(e)){let u=null;if(P||(u=l.match(i)),u&&!P){P=!0;let h=u[1].slice(1,-1),y=u[2].slice(1,-1);h.startsWith("/")||(h="/"+h),h.endsWith("/")||(h=h+"/");let f=u[0].match(s);f&&Array.from(f[0].matchAll(o)).forEach(d=>{let p=d[0].split(":")[0];(p.includes('"')||p.includes("'"))&&(p=p.slice(1,-1));let m=d[0].split(":")[1];(m.includes('"')||m.includes("'"))&&(m=m.slice(1,-1),/^[a-z0-9]+$/.test(m)||(p=m,m=""));const z=a+h+p+(m?"."+m:"")+y;t.add(z)})}(!P&&N||n)&&Array.from(l.matchAll(r)).map(y=>{const f=y[0].slice(1,-1);let d=null;try{return f.startsWith("http")?d=f:f.startsWith("//")?d=window.location.protocol+f:f.startsWith("/")?d=a+f:d=new URL(f,a).href,d}catch(p){return console.error("Error processing JS path:",p),null}}).filter(y=>y!==null).forEach(y=>t.add(y))}return t};async function j(e,n=!1,t){try{for(const a of e)if(a)for(const r of K(a))await ae(r,n,t)&&D(),await new Promise(i=>setTimeout(i,0))}catch(a){a.message!=="Extension context invalidated."&&w.error("扫描出错:",a)}}const se=()=>{L&&clearTimeout(L),L=setTimeout(()=>{w.info("DOM变化触发重新扫描...");const e=document.documentElement.innerHTML;e&&j([e],!0,document.location.href)},1e3)};function J(e){b.has(e)||b.set(e,{domains:new Map,absoluteApis:new Map,apis:new Map,moduleFiles:new Map,docFiles:new Map,ips:new Map,phones:new Map,emails:new Map,idcards:new Map,jwts:new Map,imageFiles:new Map,jsFiles:new Map,vueFiles:new Map,urls:new Map,githubUrls:new Map,companies:new Map,credentials:new Map,cookies:new Map,idKeys:new Map,fingers:new Map,progress:new Map})}const re=new MutationObserver(e=>{if(!R)return;e.filter(t=>!(t.type==="attributes"&&(t.attributeName==="class"||t.attributeName==="style"))).length>0&&se()});async function $(){try{await Q(),g||await ee(),J(g),Object.keys(b.get(g)).forEach(a=>{b.get(g)[a].clear()});let e=null;if(e=v,T===null&&chrome.storage.local.get(["customWhitelist"],a=>{T=a.customWhitelist?.some(r=>e===r||e.endsWith(`.${r}`))}),T)return;const n=document.documentElement.innerHTML;n&&await j([n],!0,document.location.href);const t=B(n,!0);t.size>0&&t.forEach(a=>{a.startsWith("chrome-extension://")||x(a,"page")}),U||(re.observe(document.body,{childList:!0,subtree:!0,characterData:!0,attributeFilter:["src","href","data-*"],characterDataOldValue:!1}),U=!0)}catch(e){e.message!=="Extension context invalidated."&&w.error("初始化扫描出错:",e)}}const D=()=>{
+  //console.log('[Content] 开始发送扫描更新'); // 添加日志信息
+  try{
+    const e={},n=C.size,t=I.length,a=k.size,r=n===0?100:Math.floor((n-t-a)/n*100);
+    b.get(g).progress.set("percent",r);
+    for(const s in b.get(g))e[s]=Array.from(b.get(g)[s]);
+    //console.log('[Content] 准备发送SCAN_UPDATE消息, tabId:', g, 'frameUrl:', window.location.href); // 添加日志信息
+    chrome.runtime.sendMessage({type:"SCAN_UPDATE",from:"content",to:"popup",results:e,tabId:g,frameUrl:window.location.href}).catch(()=>{
+      console.log('[Content] 发送SCAN_UPDATE消息失败'); // 添加日志信息
+    }),
+    chrome.runtime.sendMessage({type:"UPDATE_BADGE",from:"content",to:"background",results:e,tabId:g,frameUrl:window.location.href}).catch(()=>{
+      console.log('[Content] 发送UPDATE_BADGE消息失败'); // 添加日志信息
+    })
+  }catch(e){
+    e.message!=="Extension context invalidated."&&w.error("发送更新出错:",e)
+  }
+};
+
+async function V(){
+  for(;I.length>0&&k.size<q;){
+    const e=I.shift();
+    k.add(e),ie(e).finally(()=>{k.delete(e),k.size===0&&D(),I.length>0&&V()}),await new Promise(n=>setTimeout(n,0))
+  }
+}
+
+async function ie(e){
+  try{
+    const n=await new Promise(t=>{chrome.runtime.sendMessage({type:"FETCH_JS",url:e,from:"content",to:"background"},t)});
+    if(n?.content){
+      await j([n.content],!1,e);
+      const t=B(n.content,!1);
+      t&&t.forEach(a=>x(a,"page",W(e)))
+    }
+  }catch(n){
+    console.error("处理 JS 出错:",e,n)
+  }
+}
+
+chrome.runtime.onMessage.addListener((e,n,t)=>{
+  //console.log('[Content] 收到消息:', e); // 添加日志信息
+  try{
+    switch(e.type){
+      case"GET_RESULTS":{
+        //console.log('[Content] 处理GET_RESULTS消息, tabId:', e.tabId); // 添加日志信息
+        if(!b.get(e.tabId)){
+          console.log('[Content] 未找到tabId对应的结果'); // 添加日志信息
+          t(null);
+          break
+        }
+        D(),
+        t(null);
+        break
+      }
+      case"REFRESH_SCAN":{
+        console.log('[Content] 处理REFRESH_SCAN消息, tabId:', e.tabId); // 添加日志信息
+        // 重新初始化扫描
+        $();
+        t({success: true});
+        break
+      }
+      case"UPDATE_DYNAMIC_SCAN":{
+        console.log('[Content] 处理UPDATE_DYNAMIC_SCAN消息, enabled:', e.enabled); // 添加日志信息
+        R=!!e.enabled,
+        t({success:!0});
+        break
+      }
+      case"UPDATE_DEEP_SCAN":{
+        console.log('[Content] 处理UPDATE_DEEP_SCAN消息, enabled:', e.enabled); // 添加日志信息
+        N=!!e.enabled,
+        t({success:!0});
+        break
+      }
+      default:
+        console.log('[Content] 未知消息类型，不处理'); // 添加日志信息
+        t(null)
+    }
+  }catch(a){
+    a.message!=="Extension context invalidated."&&w.error("处理消息出错:",a),
+    t(null)
+  }
+  return!0
+});
+
+(async()=>document.readyState==="loading"?document.addEventListener("DOMContentLoaded",async()=>{await Z(),await $()}):(await Z(),await $()))();

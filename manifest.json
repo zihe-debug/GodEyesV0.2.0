@@ -33,8 +33,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_end"
+      "js": ["content.js", "fingerprint.js"],
+      "run_at": "document_idle"
     }
   ],
 
@@ -48,5 +48,12 @@
     },
     "default_badge_text": "0",
     "default_badge_background_color": "#666666"
-  }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["finger.json", "test_finger.json"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

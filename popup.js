@@ -6,6 +6,61 @@ let originalCookies = null;
 // 用于存储scanner页面的当前侧边栏状态
 let scannerSidebarState = {};
 
+// 扫描模式定义
+const scannerPatterns = {
+  domains: /\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}\b/g,
+  absoluteApis: /\/api\/[a-zA-Z0-9\-_\/\.]*/g,
+  apis: /\/[a-zA-Z0-9\-_]+\/[a-zA-Z0-9\-_]+/g,
+  moduleFiles: /\.(dll|so|dylib|class|jar|war|ear|sar|lib|a|lib\.a)\b/gi,
+  docFiles: /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|rtf|odt|ods|odp|md|markdown|csv)\b/gi,
+  credentials: /(user(name)?|login|account|acct|pass(word)?|pwd)\s*[=:]\s*["'][^"']*["']/gi,
+  idKeys: /(access|api|secret|private|public|auth|token|key)\s*[=:]\s*["'][^"']*["']/gi,
+  phones: /(\+?86\s*[-\.]?)?(1[3-9]\d{9})/g,
+  emails: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+  idcards: /(\d{17}[\dXx])|(\d{15})/g,
+  ips: /((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/g,
+  jwts: /[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*\.[A-Za-z0-9-_]*/g,
+  imageFiles: /\.(jpg|jpeg|png|gif|bmp|svg|webp|ico|tiff|tif|psd|ai|eps|raw|cr2|nef|orf|sr2|mp3|wav|ogg|flac|aac|wma|mp4|avi|mkv|mov|wmv|flv|webm|m4a|flv|f4v|f4p|f4a|f4b)\b/gi,
+  jsFiles: /\.(js|jsx|ts|tsx|vue|css|scss|sass|less|html|htm|xml|json)\b/gi,
+  vueFiles: /\.vue\b/gi,
+  urls: /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g,
+  githubUrls: /https?:\/\/(www\.)?github\.com\/[A-Za-z0-9\-_]+\/[A-Za-z0-9\-_]+/g,
+  companies: /\b(有限公司|集团|公司|企业| corporation| inc| llc| ltd)\b/gi
+};
+
+// 通过消息通信获取信息搜集结果
+async function collectInfoDirectly() {
+  console.log('[Popup] 开始信息搜集');
+  const container = document.querySelector(".scanner-page .container");
+  
+  try {
+    // 获取当前标签页
+    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+    const tab = tabs[0];
+    
+    if (!tab || !tab.id) {
+      throw new Error('无法获取当前标签页信息');
+    }
+    
+    console.log('[Popup] 当前标签页ID:', tab.id);
+    
+    // 检查标签页是否可访问
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      throw new Error('当前页面无法进行信息搜集，请切换到普通网页');
+    }
+    
+    // 发送消息给content script获取扫描结果
+    console.log('[Popup] 发送消息给content script获取扫描结果');
+    chrome.tabs.sendMessage(tab.id, {type: "GET_RESULTS", tabId: tab.id, from: "popup"});
+    
+    console.log('[Popup] 信息搜集请求已发送');
+    return null; // 结果将通过消息监听器处理
+  } catch (error) {
+    console.error('[Popup] 信息搜集失败:', error);
+    throw error;
+  }
+}
+
 // 侧边栏配置 - 基础配置
 const baseSidebarConfig = {
   scanner: [
@@ -30,10 +85,9 @@ const baseSidebarConfig = {
     { id: 'url-list', name: 'URL', icon: '🌐' }
   ],
   fingerprint: [
-    { id: 'webserver-group', name: 'Web服务器', icon: '🖥️' },
-    { id: 'technology-group', name: '技术栈', icon: '⚙️' },
-    { id: 'framework-group', name: '框架', icon: '🏗️' },
-    { id: 'cdn-group', name: 'CDN服务', icon: '📡' }
+    { id: 'fingerprint-results', name: '扫描结果', icon: '🔍' },
+    { id: 'add-fingerprint', name: '添加指纹', icon: '➕' },
+    { id: 'export-fingerprint', name: '导出指纹', icon: '📤' }
   ],
   analysis: [
     { id: 'basic-group', name: '基本信息', icon: '📋' },
@@ -165,9 +219,9 @@ function updateSidebar(page, results = null) {
     configToShow = baseSidebarConfig[page];
   }
   
-  // 对于scanner页面，始终显示侧边栏（即使没有内容）
+  // 对于scanner和fingerprint页面，始终显示侧边栏（即使没有内容）
   // 对于其他页面，只有当configToShow有内容时才显示
-  if (page === 'scanner' || configToShow.length > 0) {
+  if (page === 'scanner' || page === 'fingerprint' || configToShow.length > 0) {
     configToShow.forEach(item => {
       const button = document.createElement('button');
       button.className = 'sidebar-button';
@@ -183,7 +237,7 @@ function updateSidebar(page, results = null) {
         });
         button.classList.add('active');
         
-        // 滚动到对应内容
+        // 滚动到对应内容或显示对应模块
         let targetElement = null;
         
         // 对于信息收集页面，需要特殊处理
@@ -197,6 +251,16 @@ function updateSidebar(page, results = null) {
               targetElement = section;
               break;
             }
+          }
+        } else if (page === 'fingerprint') {
+          // 对于指纹识别页面，显示对应的模块
+          document.querySelectorAll('.fingerprint-content').forEach(el => {
+            el.style.display = 'none';
+          });
+          const targetModule = document.getElementById(item.id);
+          if (targetModule) {
+            targetModule.style.display = 'block';
+            targetElement = targetModule;
           }
         } else {
           // 对于其他页面，使用原有的查找方式
@@ -268,7 +332,24 @@ async function k(e){
       b();
       break;
     case"fingerprint":
-      U();
+      // 初始化指纹识别页面，不自动加载历史结果
+      const resultsDiv = document.getElementById('fingerprint-results');
+      resultsDiv.innerHTML = '<div class="no-match">点击"重新识别"按钮开始指纹识别</div>';
+      
+      // 绑定添加指纹表单提交事件
+      const fingerprintForm = document.getElementById('fingerprintForm');
+      if (fingerprintForm) {
+        fingerprintForm.addEventListener('submit', saveFingerprint);
+      }
+      
+      // 绑定导出指纹按钮事件
+      const exportBtn = document.getElementById('exportFingerprintBtn');
+      if (exportBtn) {
+        exportBtn.addEventListener('click', exportFingerprints);
+      }
+      
+      // 初始化侧边栏
+      updateSidebar('fingerprint');
       break;
     case"analysis":
       W();
@@ -533,16 +614,23 @@ function f(e,t,n){
 }
 
 document.addEventListener("DOMContentLoaded",async ()=>{
+  console.log('[Popup] DOM加载完成，开始初始化'); // 添加日志信息
   // 使用原有的页面切换逻辑
   const e=document.querySelector(".nav-tab.active").dataset.page;
   await g(e);
   
   const t=document.querySelector(".scanner-page .container");
+  // 移除手动刷新按钮的创建代码，因为我们已经在HTML中使用progress-tab显示进度
+  
   t.innerHTML='<div class="loading">正在扫描...</div>';
+  console.log('[Popup] 开始获取当前标签页信息'); // 添加日志信息
   u().then(n=>{
+    console.log('[Popup] 获取到标签页信息:', n); // 添加日志信息
     if(n&&n.url){
       const i=new URL(n.url).hostname.toLowerCase();
+      console.log('[Popup] 当前域名:', i); // 添加日志信息
       q(i,s=>{
+        console.log('[Popup] 白名单检查结果:', s); // 添加日志信息
         if(s){
           t.innerHTML='<div class="whitelisted">当前域名在白名单中，已跳过扫描</div>';
           y(100);
@@ -550,10 +638,13 @@ document.addEventListener("DOMContentLoaded",async ()=>{
           updateSidebar('scanner', {});
           return;
         }
-        chrome.tabs.sendMessage(n.id,{type:"GET_RESULTS",tabId:n.id,from:"popup"});
+        // 发送消息给content script获取扫描结果
+        console.log('[Popup] 发送消息给content script获取扫描结果');
+        chrome.tabs.sendMessage(n.id, {type: "GET_RESULTS", tabId: n.id, from: "popup"});
       });
     }
   });
+  
   b(),z();
 });
 
@@ -563,7 +654,25 @@ function y(e){
 }
 
 chrome.runtime.onMessage.addListener(e=>{
-  e.type==="SCAN_UPDATE"&&e.tabId===h&&(e.results&&(P(e.results), scannerSidebarState = e.results),y(e.results.progress[0][1]));
+  console.log('[Popup] 收到runtime消息:', e); // 添加日志信息
+  if (e.type === "SCAN_UPDATE" && e.tabId === h) {
+    console.log('[Popup] 处理SCAN_UPDATE消息, tabId匹配'); // 添加日志信息
+    if (e.results) {
+      P(e.results);
+      scannerSidebarState = e.results;
+    }
+    if (e.results && e.results.progress) {
+      // 确保progress是一个数组
+      const progress = Array.isArray(e.results.progress) ? e.results.progress : [e.results.progress];
+      if (progress.length > 0) {
+        // 如果progress的第一个元素是数组，取第二个元素作为进度值
+        const progressValue = Array.isArray(progress[0]) ? progress[0][1] : progress[0];
+        y(progressValue);
+      }
+    }
+  } else {
+    console.log('[Popup] SCAN_UPDATE消息不匹配, tabId:', e.tabId, '当前tabId:', h); // 添加日志信息
+  }
 });
 
 function b(){
@@ -667,50 +776,352 @@ function testBasePath() {
   });
 }
 
-function x(e){
-  const t=document.querySelector(".fingerprint-section");
-  t.innerHTML="";
-  let n=!1;
-  for(const i in e)if(e[i]&&e[i].length>0){n=!0;break}
-  if(!n){
-    t.innerHTML=`
-      <div class="notice">
-        暂未识别到指纹
-      </div>
-    `;
-    // 更新侧边栏
-    updateSidebar('fingerprint');
+// 保存自定义指纹
+async function saveFingerprint(event) {
+  event.preventDefault();
+  
+  const cmsName = document.getElementById('cmsName').value;
+  const fingerType = document.getElementById('fingerType').value;
+  const matchMethod = document.getElementById('matchMethod').value;
+  const matchLocation = document.getElementById('matchLocation').value;
+  const keywords = document.getElementById('keywords').value;
+  const isImportant = document.getElementById('isImportant').checked;
+  
+  if (!cmsName) {
+    showFingerprintMessage('请输入CMS名称', 'error');
     return;
   }
-  for(const[i,s]of Object.entries(e))if(!(s.length===0||i==="nameMap"))for(const a of s)H(t,{type:i,name:a.name,description:a.description,value:a.version||a.name});
   
-  // 更新侧边栏
-  updateSidebar('fingerprint');
+  // 构造指纹对象
+  const fingerprint = {
+    cms: cmsName,
+    type: fingerType,
+    method: matchMethod,
+    location: matchLocation,
+    keyword: keywords.split(',').map(kw => kw.trim()).filter(kw => kw),
+    isImportant: isImportant
+  };
+  
+  try {
+    // 获取现有的自定义指纹
+    const customData = await new Promise(resolve => 
+      chrome.storage.local.get(['customFingerprints'], resolve)
+    );
+    
+    let customFingerprints = customData.customFingerprints || [];
+    customFingerprints.push(fingerprint);
+    
+    // 保存到存储
+    await chrome.storage.local.set({customFingerprints: customFingerprints});
+    
+    // 清空表单
+    document.getElementById('fingerprintForm').reset();
+    
+    showFingerprintMessage('指纹保存成功', 'success');
+  } catch (error) {
+    console.error('保存指纹失败:', error);
+    showFingerprintMessage('保存指纹失败: ' + error.message, 'error');
+  }
 }
 
-function H(e,t){
-  const n=document.createElement("div");
-  n.className=`fingerprint-group ${t.type}-group`;
-  n.innerHTML=`
-    <h3>
-      <span class="tag ${t.type}-tag">${t.type[0].toUpperCase()+t.type.slice(1)}</span>
-      ${t.name}
-    </h3>
-    <div class="fingerprint-item">
-      <div class="fingerprint-label">${t.description}</div>
-      <div class="fingerprint-value server-value detected">${t.value}</div>
+// 导出指纹库
+async function exportFingerprints() {
+  try {
+    const exportResult = document.getElementById('exportResult');
+    exportResult.innerHTML = '<div class="loading">正在导出...</div>';
+    
+    // 加载内置指纹库
+    const response = await fetch(chrome.runtime.getURL('finger.json'));
+    const builtinData = await response.json();
+    
+    // 获取自定义指纹
+    const customData = await new Promise(resolve => 
+      chrome.storage.local.get(['customFingerprints'], resolve)
+    );
+    
+    // 合并指纹库
+    const allFingerprints = {
+      fingerprint: builtinData.fingerprint.concat(customData.customFingerprints || [])
+    };
+    
+    // 创建下载链接
+    const blob = new Blob([JSON.stringify(allFingerprints, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    
+    // 创建下载元素
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'finger.json';
+    document.body.appendChild(a);
+    a.click();
+    
+    // 清理
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      exportResult.innerHTML = '<div class="success">指纹库导出成功</div>';
+    }, 100);
+  } catch (error) {
+    console.error('导出指纹库失败:', error);
+    document.getElementById('exportResult').innerHTML = '<div class="error">导出失败: ' + error.message + '</div>';
+  }
+}
+
+// 显示指纹操作消息
+function showFingerprintMessage(message, type) {
+  // 创建消息元素
+  const messageEl = document.createElement('div');
+  messageEl.className = `fingerprint-message ${type}`;
+  messageEl.textContent = message;
+  
+  // 添加样式
+  messageEl.style.position = 'fixed';
+  messageEl.style.top = '50%';
+  messageEl.style.left = '50%';
+  messageEl.style.transform = 'translate(-50%, -50%)';
+  messageEl.style.padding = '10px 20px';
+  messageEl.style.borderRadius = '4px';
+  messageEl.style.color = 'white';
+  messageEl.style.fontWeight = '500';
+  messageEl.style.zIndex = '9999';
+  messageEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+  
+  // 根据类型设置背景色
+  switch(type) {
+    case 'success':
+      messageEl.style.background = '#4caf50';
+      break;
+    case 'error':
+      messageEl.style.background = '#f44336';
+      break;
+    case 'info':
+      messageEl.style.background = '#2196f3';
+      break;
+    default:
+      messageEl.style.background = '#666';
+  }
+  
+  // 添加到页面
+  document.body.appendChild(messageEl);
+  
+  // 3秒后移除
+  setTimeout(() => {
+    if (messageEl.parentNode) {
+      messageEl.parentNode.removeChild(messageEl);
+    }
+  }, 3000);
+}
+
+// 指纹识别显示函数
+function displayFingerprintResults(matches) {
+  const resultsDiv = document.getElementById('fingerprint-results');
+  
+  if (!matches || matches.length === 0) {
+    resultsDiv.innerHTML = '<div class="no-match">未发现匹配项</div>';
+    return;
+  }
+
+  const html = matches.map(match => `
+    <div class="fingerprint-card ${match.isImportant ? 'important' : ''}">
+      <div class="fingerprint-header">
+        <strong class="fingerprint-cms">${match.cms}</strong>
+        <span class="type-label">[${match.type !== '-' ? match.type : '未分类'}]</span>
+      </div>
+      <div class="fingerprint-details">
+        <div class="fingerprint-info">匹配方式: ${match.method === 'keyword' ? '关键词' : 'Favicon哈希'}</div>
+        <div class="fingerprint-info">匹配位置: ${match.location}</div>
+      </div>
     </div>
-  `;
-  e.appendChild(n);
+  `).join('');
+  
+  resultsDiv.innerHTML = html;
 }
 
-function U(){
-  u().then(e=>{
-    e&&(console.log("Requesting fingerprints for tab:",e.id),chrome.runtime.sendMessage({type:"GET_FINGERPRINTS",tabId:e.id,from:"popup",to:"background"},t=>{
-      console.log("Received response:",t);
-      t&&x(t);
-    }));
-  });
+// 测试指纹识别功能
+async function testFingerprint() {
+  console.log('[Popup] 开始测试指纹识别功能');
+  
+  try {
+    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+    const tab = tabs[0];
+    
+    if (!tab || !tab.id) {
+      throw new Error('无法获取当前标签页信息');
+    }
+    
+    console.log('[Popup] 测试标签页ID:', tab.id);
+    console.log('[Popup] 测试标签页URL:', tab.url);
+    
+    // 发送测试消息
+    console.log('[Popup] 发送测试消息');
+    const response = await chrome.tabs.sendMessage(tab.id, {type: 'TEST_FINGERPRINT'});
+    console.log('[Popup] 收到测试响应:', response);
+    
+    return response;
+  } catch (error) {
+    console.error('[Popup] 测试指纹识别失败:', error);
+    throw error;
+  }
+}
+
+// 扫描指纹 - 简化直接版本
+async function scanFingerprint() {
+  const resultsDiv = document.getElementById('fingerprint-results');
+  resultsDiv.innerHTML = '<div class="loading">正在识别中...</div>';
+  
+  try {
+    console.log('[Popup] 开始指纹扫描');
+    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+    const tab = tabs[0];
+    
+    // 检查tab是否存在
+    if (!tab || !tab.id) {
+      throw new Error('无法获取当前标签页信息');
+    }
+    
+    console.log('[Popup] 当前标签页ID:', tab.id);
+    console.log('[Popup] 当前标签页URL:', tab.url);
+    
+    // 检查标签页是否可访问
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      throw new Error('当前页面无法进行指纹识别，请切换到普通网页');
+    }
+    
+    // 发送消息触发指纹扫描
+    await chrome.runtime.sendMessage({type: 'TRIGGER_FINGERPRINT_SCAN'});
+    
+    // 直接获取页面内容
+    console.log('[Popup] 获取页面内容');
+    const results = await chrome.scripting.executeScript({
+      target: {tabId: tab.id},
+      func: () => {
+        return {
+          title: document.title,
+          content: document.documentElement.innerHTML
+        };
+      }
+    });
+    
+    if (!results || results.length === 0 || !results[0].result) {
+      throw new Error('无法获取页面内容');
+    }
+    
+    const pageData = results[0].result;
+    console.log('[Popup] 页面标题:', pageData.title);
+    console.log('[Popup] 页面内容长度:', pageData.content.length);
+    
+    // 加载指纹库
+    console.log('[Popup] 加载指纹库');
+    const fingerprintResponse = await fetch(chrome.runtime.getURL('finger.json'));
+    if (!fingerprintResponse.ok) {
+      throw new Error(`无法加载指纹库: ${fingerprintResponse.status} ${fingerprintResponse.statusText}`);
+    }
+    
+    const fingerprintData = await fingerprintResponse.json();
+    if (!fingerprintData || !Array.isArray(fingerprintData.fingerprint)) {
+      throw new Error('指纹库数据格式不正确');
+    }
+    
+    const fingerprints = fingerprintData.fingerprint;
+    console.log('[Popup] 指纹库加载完成，指纹数量:', fingerprints.length);
+    
+    // 执行匹配
+    console.log('[Popup] 开始匹配');
+    const matches = [];
+    
+    // 检查所有指纹，而不是只检查前100个
+    const fingerprintsToCheck = fingerprints;
+    console.log('[Popup] 检查指纹数量:', fingerprintsToCheck.length);
+    
+    // 添加匹配进度日志
+    let checkedCount = 0;
+    const totalFingerprints = fingerprintsToCheck.length;
+    
+    for (const fp of fingerprintsToCheck) {
+      // 每检查1000个指纹记录一次进度
+      if (checkedCount % 1000 === 0) {
+        console.log(`[Popup] 匹配进度: ${checkedCount}/${totalFingerprints}`);
+      }
+      
+      if (!fp || !fp.method || !fp.keyword) {
+        checkedCount++;
+        continue;
+      }
+      
+      let isMatch = false;
+      
+      if (fp.method === 'keyword') {
+        if (fp.location === 'title') {
+          isMatch = fp.keyword.some(kw => 
+            typeof kw === 'string' && pageData.title.includes(kw)
+          );
+          if (isMatch) {
+            console.log(`[Popup] 标题匹配成功: ${fp.cms}`, fp.keyword);
+          }
+        } else if (fp.location === 'body') {
+          // 修改为与Finger24一致的逻辑：要求所有关键词都匹配才成功
+          isMatch = fp.keyword.every(kw => 
+            typeof kw === 'string' && pageData.content.includes(kw)
+          );
+          if (isMatch) {
+            console.log(`[Popup] 内容匹配成功: ${fp.cms}`, fp.keyword);
+          }
+        }
+      }
+      
+      if (isMatch) {
+        matches.push({
+          cms: fp.cms || '未知CMS',
+          type: fp.type || '其他',
+          method: fp.method || '未知',
+          location: fp.location || '未知',
+          isImportant: fp.isImportant || false
+        });
+      }
+      
+      checkedCount++;
+    }
+    
+    console.log('[Popup] 匹配完成，结果数量:', matches.length);
+    displayFingerprintResults(matches);
+  } catch (error) {
+    console.error('[Popup] 指纹扫描失败:', error);
+    let errorMessage = error.message || '未知错误';
+    
+    // 根据错误类型提供更具体的提示
+    if (errorMessage.includes('Failed to fetch')) {
+      errorMessage = '无法加载指纹库文件，请检查文件是否存在';
+    } else if (errorMessage.includes('无法获取页面内容')) {
+      errorMessage = '无法获取当前页面内容，请刷新页面后重试';
+    } else if (errorMessage.includes('指纹库数据格式不正确')) {
+      errorMessage = '指纹库文件格式错误，请检查finger.json文件';
+    }
+    
+    resultsDiv.innerHTML = `<div class="no-match">扫描失败: ${errorMessage}</div>`;
+  }
+}
+
+// 获取已扫描的指纹结果
+async function getFingerprintResults() {
+  const resultsDiv = document.getElementById('fingerprint-results');
+  resultsDiv.innerHTML = '<div class="loading">正在加载识别结果...</div>';
+  
+  try {
+    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+    const tab = tabs[0];
+    
+    // 发送消息获取已扫描的指纹结果
+    const response = await chrome.tabs.sendMessage(tab.id, {type: 'FINGERPRINT_GET_MATCHES'});
+    
+    if (response && response.matches) {
+      displayFingerprintResults(response.matches);
+    } else {
+      resultsDiv.innerHTML = '<div class="no-match">暂无识别结果</div>';
+    }
+  } catch (error) {
+    console.error('获取指纹结果失败:', error);
+    resultsDiv.innerHTML = '<div class="no-match">获取结果失败: ' + error.message + '</div>';
+  }
 }
 
 function W(){
@@ -928,6 +1339,12 @@ const _={
     e.preventDefault();
     e.stopPropagation();
     openAllUrls();
+    return false;
+  },
+  "click #fingerprintScanBtn":(e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    scanFingerprint();
     return false;
   }
 };

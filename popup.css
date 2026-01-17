@@ -170,6 +170,39 @@ body {
   margin-bottom: 12px;
 }
 
+/* 手动刷新按钮样式 */
+.refresh-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  background: #228be6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  z-index: 10;
+}
+
+.refresh-btn:hover {
+  background: #1c7ed6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.refresh-btn:active {
+  transform: translateY(0);
+}
+
+.refresh-btn svg {
+  flex-shrink: 0;
+}
+
 .page-title {
   margin: 0;
   font-size: 16px;
@@ -1688,7 +1721,7 @@ body {
 .url-multi-method select:focus {
   outline: none;
   border-color: #228be6;
-  box-shadow: 0 0 0 2px rgba(34, 139, 230, 0.1);
+  box-shadow: 0 0 0 2px rgba(34, 201, 151, 0.1);
 }
 
 .url-multi-buttons {
@@ -1734,4 +1767,217 @@ body {
   background: #e9ecef;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 指纹识别页面样式 */
+.fingerprint-section {
+  padding: 16px;
+}
+
+.fingerprint-content {
+  margin-bottom: 20px;
+}
+
+.fingerprint-content h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #212529;
+  font-size: 16px;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 8px;
+}
+
+/* 指纹卡片样式 - 实现带垂直间距的卡片式列表布局 */
+.fingerprint-card {
+  margin-bottom: 12px;
+  padding: 12px 15px;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  background-color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.fingerprint-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.fingerprint-card.important {
+  background-color: #fff8e6;
+  border-left: 3px solid #ffc107;
+}
+
+.fingerprint-card.important::before {
+  content: "!";
+  position: absolute;
+  top: 5px;
+  right: 10px;
+  font-weight: bold;
+  color: #ffc107;
+}
+
+/* 指纹卡片头部样式 */
+.fingerprint-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #e9ecef;
+}
+
+.fingerprint-cms {
+  font-size: 15px;
+  color: #212529;
+  margin-right: 10px;
+}
+
+.type-label {
+  font-size: 11px;
+  color: #6c757d;
+  background-color: #f1f3f5;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+/* 指纹卡片详情样式 */
+.fingerprint-details {
+  padding-left: 5px;
+}
+
+.fingerprint-info {
+  font-size: 12px;
+  color: #495057;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.fingerprint-info:last-child {
+  margin-bottom: 0;
+}
+
+.fingerprint-info::before {
+  content: "•";
+  margin-right: 8px;
+  color: #adb5bd;
+}
+
+/* 无匹配结果样式 */
+.no-match {
+  color: #6c757d;
+  font-style: italic;
+  text-align: center;
+  padding: 30px 20px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin: 10px 0;
+  border: 1px dashed #e9ecef;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-group input {
+  width: auto;
+  margin-right: 8px;
+}
+
+.checkbox-group label {
+  margin-bottom: 0;
+}
+
+.save-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.save-btn:hover {
+  background: #0056b3;
+}
+
+.export-result {
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.export-result .loading {
+  color: #6c757d;
+  text-align: center;
+}
+
+.export-result .success {
+  color: #155724;
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+}
+
+.export-result .error {
+  color: #721c24;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+}
+
+.fingerprint-message {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 20px;
+  border-radius: 4px;
+  color: white;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.fingerprint-message.success {
+  background: #4caf50;
+}
+
+.fingerprint-message.error {
+  background: #f44336;
+}
+
+.fingerprint-message.info {
+  background: #2196f3;
 }
